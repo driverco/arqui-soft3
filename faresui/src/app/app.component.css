@@ -1,0 +1,9 @@
+.response-panel {
+  margin-top: 16px;
+}
+
+.error-text {
+  border: 1px solid #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
+}

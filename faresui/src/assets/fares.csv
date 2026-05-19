@@ -1,0 +1,38 @@
+flight_id,origin,destination,fare,currency,available_seats
+AA100,New York,Los Angeles,350.00,USD,120
+AA101,New York,Chicago,280.00,USD,85
+AA102,Los Angeles,New York,360.00,USD,95
+DL200,Atlanta,Boston,320.00,USD,110
+DL201,Boston,Atlanta,310.00,USD,100
+UA300,San Francisco,Miami,440.00,USD,75
+UA301,Miami,San Francisco,450.00,USD,82
+SW400,Denver,Las Vegas,220.00,USD,150
+SW401,Las Vegas,Denver,225.00,USD,145
+BA500,New York,London,680.00,GBP,60
+BA501,London,New York,700.00,GBP,55
+JL600,Tokyo,New York,890.00,USD,45
+JL601,New York,Tokyo,920.00,USD,40
+AF700,Paris,New York,720.00,EUR,65
+AF701,New York,Paris,750.00,EUR,60
+LH800,Berlin,New York,680.00,EUR,50
+LH801,New York,Berlin,700.00,EUR,48
+NZ900,Auckland,Los Angeles,560.00,NZD,70
+NZ901,Los Angeles,Auckland,580.00,NZD,68
+EK1000,Dubai,New York,890.00,AED,80
+EK1001,New York,Dubai,910.00,AED,75
+QF1100,Sydney,San Francisco,620.00,AUD,55
+QF1101,San Francisco,Sydney,640.00,AUD,52
+SQ1200,Singapore,New York,750.00,SGD,65
+SQ1201,New York,Singapore,770.00,SGD,62
+CA1300,Beijing,Los Angeles,580.00,CNY,70
+CA1301,Los Angeles,Beijing,600.00,CNY,65
+AZ1400,Rome,New York,700.00,EUR,58
+AZ1401,New York,Rome,720.00,EUR,55
+KL1500,Amsterdam,Chicago,480.00,EUR,75
+KL1501,Chicago,Amsterdam,500.00,EUR,72
+AC1600,Toronto,Los Angeles,380.00,CAD,95
+AC1601,Los Angeles,Toronto,400.00,CAD,90
+MX1700,Mexico City,New York,290.00,MXN,110
+MX1701,New York,Mexico City,310.00,MXN,105
+BR1800,São Paulo,New York,520.00,BRL,68
+BR1801,New York,São Paulo,540.00,BRL,65
