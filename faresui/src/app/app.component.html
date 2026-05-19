@@ -1,0 +1,58 @@
+<div class="app-container">
+  <h1 class="page-title">Fares API Gateway</h1>
+
+  <div class="card">
+    <h2>Search fares</h2>
+    <p>Enter a flight ID to get a specific fare, or leave origin/destination empty to show all fares.</p>
+    <div class="form-row">
+      <label>
+        Flight ID
+        <input type="text" [(ngModel)]="flightId" placeholder="e.g. BA501" />
+      </label>
+      <label>
+        Origin
+        <select [(ngModel)]="origin">
+          <option value="">Any</option>
+          <option *ngFor="let o of originsList" [value]="o">{{ o }}</option>
+        </select>
+      </label>
+      <label>
+        Destination
+        <select [(ngModel)]="destination">
+          <option value="">Any</option>
+          <option *ngFor="let d of destinationsList" [value]="d">{{ d }}</option>
+        </select>
+      </label>
+    </div>
+    <div class="button-row">
+      <button (click)="search()" [disabled]="loading">Search</button>
+    </div>
+
+    <div *ngIf="tableData?.length" class="response-panel">
+      <div class="result-summary" *ngIf="fareResult">
+        Showing fare for <strong>{{ fareResult.consensus_fare?.flight_id || fareResult.flight_id }}</strong>
+      </div>
+      <div class="result-summary" *ngIf="searchResult">
+        Showing <strong>{{ searchResult.count || (tableData.length) }}</strong> fares
+      </div>
+      <table class="result-table">
+        <thead>
+          <tr>
+            <th *ngFor="let col of tableColumns">{{ col.replace('_', ' ') | titlecase }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of tableData">
+            <td *ngFor="let col of tableColumns">{{ row[col] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div *ngIf="errorMessage" class="card error-text">
+    {{ errorMessage }}
+  </div>
+
+  <p class="small-note">This UI calls the API gateway through <strong>/api</strong> and forwards requests to the fares API.</p>
+</div>
