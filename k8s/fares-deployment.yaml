@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fares
+  namespace: default
+  labels:
+    app: fares
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fares
+  template:
+    metadata:
+      labels:
+        app: fares
+    spec:
+      containers:
+      - name: fares
+        image: fares:latest
+        imagePullPolicy: Never  # For minikube local images
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: SERVICE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2

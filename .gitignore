@@ -1,0 +1,7 @@
+.vscode
+*/__pycache__/
+*.pyc
+*/.venv/
+*.angular
+/faresui/dist
+/faresui/node_modules
