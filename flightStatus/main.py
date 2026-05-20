@@ -3,6 +3,15 @@ import json
 from typing import List, Dict, Any, Optional
 from kafka import KafkaConsumer, KafkaProducer
 from pydantic import BaseModel, ValidationError
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 bootstrap_servers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 
@@ -130,13 +139,13 @@ class FlightStatusService:
         try:
             request = UpdateFlightStatusRequest(**message.value)
         except ValidationError as exc:
-            print(f"Invalid update payload: {exc}")
+            logger.error(f"Invalid update payload: {exc}")
             return
 
         try:
             response = self.update_flight_status(request)
             response_payload = self._create_response_payload(response, request.correlation_id)
-            print(f"Updated flight {request.flight_id}: {response_payload}")
+            logger.info(f"Updated flight {request.flight_id}: {response_payload}")
             self.producer.send(self.response_topic, value=response_payload)
             self.producer.flush()
         except ValueError as exc:
@@ -148,7 +157,7 @@ class FlightStatusService:
                 error_payload["correlation_id"] = request.correlation_id
             self.producer.send(self.response_topic, value=error_payload)
             self.producer.flush()
-            print(str(exc))
+            logger.error(str(exc))
 
     def process_message(self, message: Any) -> None:
         if message.topic == self.update_topic:
@@ -158,13 +167,13 @@ class FlightStatusService:
         try:
             request = FlightStatusRequest(**message.value)
         except ValidationError as exc:
-            print(f"Invalid request payload: {exc}")
+            logger.error(f"Invalid request payload: {exc}")
             return
 
         try:
             response = self.get_flight_status(request)
             response_payload = self._create_response_payload(response, request.correlation_id)
-            print(f"Flight Status for {request.flight_id}: {response_payload}")
+            logger.info(f"Flight Status for {request.flight_id}: {response_payload}")
             self.producer.send(self.response_topic, value=response_payload)
             self.producer.flush()
         except ValueError as exc:
@@ -176,12 +185,12 @@ class FlightStatusService:
                 error_payload["correlation_id"] = request.correlation_id
             self.producer.send(self.response_topic, value=error_payload)
             self.producer.flush()
-            print(str(exc))
+            logger.error(str(exc))
 
     def run(self) -> None:
-        print(f"Starting FlightStatusService consumer on Kafka at {self.bootstrap_servers}")
+        logger.info(f"Starting FlightStatusService consumer on Kafka at {self.bootstrap_servers}")
         for message in self.consumer:
-            print(f"Received request message: {message.value}")
+            logger.info(f"Received request message: {message.value}")
             self.process_message(message)
 
 

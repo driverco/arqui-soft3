@@ -8,6 +8,14 @@ import os
 import json
 import time
 import uuid
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 bootstrap_servers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092").split(",")
 
@@ -96,9 +104,9 @@ def read_item(flight_id: str, q: str | None = None):
         consumer.poll(timeout_ms=100)
         future = producer.send("get-flight-status", value=data)
         metadata = future.get(timeout=10)
-        print(f"Message sent to topic: {metadata.topic}")
-        print(f"Partition assigned: {metadata.partition}")
-        print(f"Offset assigned: {metadata.offset}")
+        logger.info(f"Message sent to topic: {metadata.topic}")
+        logger.info(f"Partition assigned: {metadata.partition}")
+        logger.info(f"Offset assigned: {metadata.offset}")
 
         response = wait_for_flight_status_response(consumer, correlation_id, timeout=10.0)
         if response is None:
@@ -109,7 +117,7 @@ def read_item(flight_id: str, q: str | None = None):
 
         return response
     except Exception as e:
-        print(f"Error while waiting for Kafka response: {e}")
+        logger.error(f"Error while waiting for Kafka response: {e}")
         raise HTTPException(status_code=502, detail=str(e))
     finally:
         consumer.close()
