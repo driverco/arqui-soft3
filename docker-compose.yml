@@ -1,6 +1,45 @@
-version: '3.8'
-
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
+
+  # Flight Status service
+  flight-status:
+    build:
+      context: .
+      dockerfile: Dockerfile.flightStatus
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    container_name: flight-status
+    depends_on:
+      - kafka
+
   # Fares service - Pod 1
   fares-pod-1:
     build:
@@ -16,6 +55,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    depends_on:
+      - kafka
 
   # Fares service - Pod 2
   fares-pod-2:
@@ -32,6 +73,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    depends_on:
+      - kafka
 
   # Fares service - Pod 3
   fares-pod-3:
@@ -48,7 +91,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
+    depends_on:
+      - kafka
   # Fares API - Gateway
   fares-api:
     build:
@@ -79,14 +123,37 @@ services:
     environment:
       - SERVICE_NAME=api-gateway
       - FARES_API_BASE_URL=http://fares-api:8000
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     container_name: api-gateway
     depends_on:
+      - kafka
       - fares-api
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+
+  # Fares master synchronization service
+  fares-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.faresMaster
+    ports:
+      - "8020:8000"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - FARES_POD_URLS=http://fares-pod-1:8000,http://fares-pod-2:8000,http://fares-pod-3:8000
+      - FARES_OUTPUT_FILE=/app/fares.csv
+    container_name: fares-master
+    volumes:
+      - ./data:/data
+    depends_on:
+      - kafka
+      - fares-pod-1
+      - fares-pod-2
+      - fares-pod-3
 
   # Angular UI for API Gateway
   faresui:

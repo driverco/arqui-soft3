@@ -6,7 +6,7 @@ WORKDIR /app
 COPY apigateway/main.py .
 
 # Install FastAPI and Uvicorn
-RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx
+RUN pip install --no-cache-dir fastapi uvicorn[standard] httpx kafka-python-ng kafka
 
 # Expose the port
 EXPOSE 8000

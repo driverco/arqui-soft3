@@ -1,9 +1,25 @@
 from fastapi import FastAPI, HTTPException
 import httpx
 import asyncio
+import os
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import json
+import logging                                                                  
+import sys 
+from kafka import KafkaProducer
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+console = logging.StreamHandler(sys.stdout)
+logger.addHandler(console)
+
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+producer = KafkaProducer(
+    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    acks="all"
+)
 
 app = FastAPI()
 
@@ -47,6 +63,19 @@ class SearchValidationResponse(BaseModel):
     details: str
 
 
+def produce_fares_sync_message(pod_name: Optional[str]= "", url: Optional[str]= "", status: Optional[str]= "", error_message: Optional[str]= "", endpoint: Optional[str] = "") -> None:
+    try:
+        payload = {
+            "event": "pod-failure",
+            "pod_name": pod_name
+        }
+        producer.send("fares-sync", value=payload)
+        producer.flush()
+        logger.info(f"Produced fares-sync event for pod failure: {pod_name} {endpoint}")
+    except Exception as exc:
+        logger.error(f"Failed to produce fares-sync message: {exc}")
+
+
 async def fetch_fare_from_pod(pod: Dict[str, str], flight_id: str) -> PodResponse:
     """
     Fetch fare from a single pod instance and return response with validation.
@@ -71,6 +100,15 @@ async def fetch_fare_from_pod(pod: Dict[str, str], flight_id: str) -> PodRespons
                     error_message=f"Flight {flight_id} not found (404)"
                 )
             else:
+                logger.error(f"HTTP {response.status_code}: {response.text}")
+                logger.error(f"Pod failing Detection !!!!")
+                produce_fares_sync_message(
+                    pod_name=pod["name"],
+                    url=pod["url"],
+                    status="unhealthy",
+                    error_message=f"HTTP {response.status_code}: {response.text}",
+                    endpoint=f"/fare/{flight_id}"
+                )
                 return PodResponse(
                     pod_name=pod["name"],
                     url=pod["url"],
@@ -78,6 +116,9 @@ async def fetch_fare_from_pod(pod: Dict[str, str], flight_id: str) -> PodRespons
                     error_message=f"HTTP {response.status_code}: {response.text}"
                 )
     except asyncio.TimeoutError:
+        produce_fares_sync_message(
+            pod_name=pod["name"]
+        )
         return PodResponse(
             pod_name=pod["name"],
             url=pod["url"],
@@ -85,6 +126,12 @@ async def fetch_fare_from_pod(pod: Dict[str, str], flight_id: str) -> PodRespons
             error_message="Request timeout - pod not responding"
         )
     except Exception as e:
+        logger.error(f"Error fetching fare from {pod['name']}: {str(e)}")
+        logger.error(f"Pod failing Detection !!!! ")
+        produce_fares_sync_message(
+            pod_name=pod["name"],
+            url=pod["url"]
+        )
         return PodResponse(
             pod_name=pod["name"],
             url=pod["url"],
@@ -103,6 +150,7 @@ async def fetch_search_from_pod(pod: Dict[str, str], origin: Optional[str], dest
     if destination:
         params["destination"] = destination
 
+    endpoint = "/fares"
     try:
         async with httpx.AsyncClient(timeout=POD_REQUEST_TIMEOUT) as client:
             response = await client.get(f"{pod['url']}/fares", params=params)
@@ -123,25 +171,48 @@ async def fetch_search_from_pod(pod: Dict[str, str], origin: Optional[str], dest
                     error_message=f"Search not found (404)"
                 )
             else:
+                error_msg = f"HTTP {response.status_code}: {response.text}"
+                logger.error(error_msg)
+                logger.error(f"Pod failing Detection !!!! ")
+                produce_fares_sync_message(
+                    pod_name=pod["name"],
+                    url=pod["url"]
+                )
                 return PodResponse(
                     pod_name=pod["name"],
                     url=pod["url"],
                     status="unhealthy",
-                    error_message=f"HTTP {response.status_code}: {response.text}"
+                    error_message=error_msg
                 )
     except asyncio.TimeoutError:
+        error_message = "Request timeout - pod not responding"
+        produce_fares_sync_message(
+            pod_name=pod["name"],
+            url=pod["url"],
+            status="timeout",
+            error_message=error_message,
+            endpoint=endpoint
+        )
         return PodResponse(
             pod_name=pod["name"],
             url=pod["url"],
             status="timeout",
-            error_message="Request timeout - pod not responding"
+            error_message=error_message
         )
     except Exception as e:
+        error_message = f"Connection error: {str(e)}"
+        produce_fares_sync_message(
+            pod_name=pod["name"],
+            url=pod["url"],
+            status="error",
+            error_message=error_message,
+            endpoint=endpoint
+        )
         return PodResponse(
             pod_name=pod["name"],
             url=pod["url"],
             status="error",
-            error_message=f"Connection error: {str(e)}"
+            error_message=error_message
         )
 
 
@@ -199,8 +270,15 @@ async def validate_fares_across_pods(flight_id: str, detail: Optional[str] = Non
         details_parts.append(f"✓ All {healthy_count} pods are responding correctly")
         if not all_match:
             details_parts.append("⚠ WARNING: Pod responses do not match!")
+            logger.error("⚠ WARNING: Pod responses do not match!")
+            logger.error(f"Pod failing Detection !!!!")
+            produce_fares_sync_message( )
+
     else:
         details_parts.append(f"✗ {unhealthy_count} pod(s) not responding correctly: {', '.join(unhealthy_pods)}")
+        logger.error(f"✗ {unhealthy_count} pod(s) not responding correctly: {', '.join(unhealthy_pods)}")
+        logger.error(f"Pod failing Detection !!!!")
+        produce_fares_sync_message()
         details_parts.append(f"✓ {healthy_count} pod(s) responding correctly: {', '.join(healthy_pods)}")
 
     if consensus:
@@ -256,8 +334,12 @@ async def validate_search_fares(
             details_parts.append("⚠ WARNING: Pod responses do not match!")
     else:
         details_parts.append(f"✗ {unhealthy_count} pod(s) not responding correctly: {', '.join(unhealthy_pods)}")
-        details_parts.append(f"✓ {len(healthy_responses)} pod(s) responding correctly: {', '.join(healthy_pods)}")
+        logger.error(f"✗ {unhealthy_count} pod(s) not responding correctly: {', '.join(unhealthy_pods)}")
+        logger.error(f"Pod failing Detection !!!!")
+        produce_fares_sync_message()
 
+        details_parts.append(f"✓ {len(healthy_responses)} pod(s) responding correctly: {', '.join(healthy_pods)}")
+ 
     if consensus is not None:
         count = consensus.get("count") if isinstance(consensus, dict) else None
         details_parts.append(f"Consensus results count: {count if count is not None else 'N/A'}")

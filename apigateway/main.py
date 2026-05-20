@@ -1,10 +1,22 @@
+from importlib import metadata
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from kafka import KafkaConsumer, KafkaProducer
 import httpx
 import os
+import json
+import time
+import uuid
+
+bootstrap_servers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092").split(",")
 
 app = FastAPI()
-
+producer = KafkaProducer(
+    bootstrap_servers=bootstrap_servers,
+    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+    acks='all'
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4200"], # Allow your Angular/React app
@@ -54,9 +66,54 @@ async def search_fares(origin: str | None = None, destination: str | None = None
     return response.json()
 
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str | None = None):
-    return {"item_id": item_id, "q": q}
+def wait_for_flight_status_response(consumer: KafkaConsumer, correlation_id: str, timeout: float = 10.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        records = consumer.poll(timeout_ms=500)
+        for messages in records.values():
+            for message in messages:
+                value = message.value
+                if value.get("correlation_id") == correlation_id:
+                    return value
+    return None
+
+
+@app.get("/flights/get-flight-status/{flight_id}")
+def read_item(flight_id: str, q: str | None = None):
+    correlation_id = str(uuid.uuid4())
+    data = {"flight_id": flight_id, "correlation_id": correlation_id}
+
+    consumer = KafkaConsumer(
+        "flight-status-response",
+        bootstrap_servers=bootstrap_servers,
+        auto_offset_reset="latest",
+        enable_auto_commit=False,
+        consumer_timeout_ms=1000,
+        value_deserializer=lambda x: json.loads(x.decode("utf-8")),
+    )
+
+    try:
+        consumer.poll(timeout_ms=100)
+        future = producer.send("get-flight-status", value=data)
+        metadata = future.get(timeout=10)
+        print(f"Message sent to topic: {metadata.topic}")
+        print(f"Partition assigned: {metadata.partition}")
+        print(f"Offset assigned: {metadata.offset}")
+
+        response = wait_for_flight_status_response(consumer, correlation_id, timeout=10.0)
+        if response is None:
+            raise HTTPException(status_code=504, detail="Timed out waiting for flight status response")
+
+        if response.get("error"):
+            raise HTTPException(status_code=404, detail=response["error"])
+
+        return response
+    except Exception as e:
+        print(f"Error while waiting for Kafka response: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+    finally:
+        consumer.close()
+
 
 if __name__ == "__main__":
     import uvicorn
