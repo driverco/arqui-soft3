@@ -11,7 +11,7 @@ from kafka import KafkaProducer
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    format='%(asctime)s.%(msecs)03d %(levelname)s %(name)s %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
@@ -385,7 +385,7 @@ async def check_pod_health() -> Dict[str, Any]:
         "healthy_pods": healthy,
         "unhealthy_pods": len(POD_INSTANCES) - healthy,
         "pod_details": pod_statuses,
-        "timestamp": asyncio.get_event_loop().time()
+        "timestamp": int(asyncio.get_event_loop().time() * 1000)
     }
 
 
